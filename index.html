@@ -55,20 +55,31 @@
             opacity: 0;
             cursor: pointer;
         }
+        
+        /* Status Indicators in Grid */
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            position: absolute;
+            bottom: -8px;
+        }
+        .dot-approved { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .dot-pending { background-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+        .dot-rejected { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+        .day-circle {
+            position: relative;
+            transition: all 0.2s ease;
+        }
         .day-active {
-            background-color: #059669;
-            color: white;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border: 1px solid #e2e8f0;
         }
         .day-selected {
-            ring: 2px solid #10b981;
+            ring: 2px solid #059669;
             ring-offset: 2px;
-        }
-        #brandLogoPreview {
-            width: 32px;
-            height: 32px;
-            object-fit: contain;
-            border-radius: 6px;
-            background: #f1f5f9;
         }
     </style>
 </head>
@@ -86,7 +97,6 @@
                 </div>
                 
                 <div class="flex items-center gap-6">
-                    <!-- Brand Selector with Logo Display -->
                     <div class="flex items-center gap-3">
                         <div class="relative group cursor-pointer" onclick="document.getElementById('logoUploadInput').click()">
                             <img id="brandLogoDisplay" src="https://ui-avatars.com/api/?name=B&background=f1f5f9&color=cbd5e1" alt="Logo" class="w-9 h-9 rounded-lg border border-slate-200 object-contain bg-white">
@@ -97,9 +107,9 @@
                         </div>
                         <div class="flex flex-col">
                             <label class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Brand Profile</label>
-                            <select id="brandSelect" class="bg-transparent font-bold focus:outline-none text-slate-800 text-sm cursor-pointer" onchange="loadBrandMetadata(); loadWeeklyData();">
+                            <select id="brandSelect" class="bg-transparent font-bold focus:outline-none text-slate-800 text-sm cursor-pointer" onchange="handleBrandChange()">
                                 <option value="19d27e5f-b230-4c2a-a5a7-6c2e59fbba88">Natures Treasure</option>
-                                <option value="idonstore-id-placeholder">Idonstore</option>
+                                <option value="8a3d5f21-e7c4-4b5a-9311-6c2e59fbba99">Idonstore</option>
                             </select>
                         </div>
                     </div>
@@ -132,13 +142,13 @@
             <div class="glass-card rounded-2xl p-6 shadow-sm mb-6 border-l-4 border-l-emerald-500">
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center gap-4">
-                        <button onclick="changeWeek(-1)" class="p-2 hover:bg-slate-50 rounded-full text-slate-400">
+                        <button onclick="changeWeek(-1)" class="p-2 hover:bg-slate-50 rounded-full text-slate-400 transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                         </button>
                         <h3 id="weekRangeDisplay" class="text-sm font-bold text-slate-900 uppercase tracking-widest">
                             Loading week...
                         </h3>
-                        <button onclick="changeWeek(1)" class="p-2 hover:bg-slate-50 rounded-full text-slate-400">
+                        <button onclick="changeWeek(1)" class="p-2 hover:bg-slate-50 rounded-full text-slate-400 transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                         </button>
                     </div>
@@ -147,13 +157,13 @@
                     </div>
                 </div>
 
-                <div id="weekDaysGrid" class="grid grid-cols-7 gap-2 mb-6">
+                <div id="weekDaysGrid" class="grid grid-cols-7 gap-2 mb-10">
                     <!-- Days loaded via JS -->
                 </div>
 
                 <div class="flex items-center justify-between pt-4 border-t border-slate-100">
                     <div class="flex flex-col">
-                        <p class="text-[10px] text-slate-400 font-medium italic">Click a date to view or schedule content.</p>
+                        <p class="text-[10px] text-slate-400 font-medium italic">Monitor individual post statuses via the indicators above.</p>
                         <button onclick="resetFormToNew()" class="text-[9px] font-bold text-indigo-500 uppercase mt-1 hover:underline">Clear / Create New</button>
                     </div>
                     <button id="approveWeekBtn" onclick="toggleWeeklyApproval()" class="bg-slate-900 text-white text-[10px] font-bold px-4 py-2 rounded-lg hover:bg-slate-800 transition-all uppercase tracking-widest">
@@ -323,14 +333,18 @@
             fetchPostForDate(iso);
         };
 
+        window.handleBrandChange = () => {
+            loadBrandMetadata();
+            loadWeeklyData();
+            fetchPostForDate(postDateInput.value);
+        };
+
         window.generateApprovalLink = () => {
             const { monday } = getWeekInfo(viewDate);
             const dateStr = monday.toISOString().split('T')[0];
             const brandId = brandSelect.value;
-            // Assuming the client portal URL structure
             const link = `${window.location.origin}/client-portal?brand=${brandId}&week=${dateStr}`;
             
-            // Clipboard logic
             const el = document.createElement('textarea');
             el.value = link;
             document.body.appendChild(el);
@@ -345,12 +359,9 @@
         async function loadBrandMetadata() {
             const brandId = brandSelect.value;
             const brandName = brandSelect.options[brandSelect.selectedIndex].text;
-            
-            // Set basic UI recognition
             previewBrand.innerText = brandName;
             
             try {
-                // Fetch brand details from a 'brands' table
                 const { data, error } = await _supabase
                     .from('brands')
                     .select('logo_url')
@@ -378,7 +389,6 @@
             const brandId = brandSelect.value;
             const brandName = brandSelect.options[brandSelect.selectedIndex].text;
             
-            // Helper to generate a slug from the brand name
             const generateSlug = (name) => {
                 return name.toLowerCase()
                     .replace(/\s+/g, '-')
@@ -394,30 +404,12 @@
 
             try {
                 showToast("Uploading logo...", "info");
-                
-                // 1. Upload to storage
-                const { error: uploadErr } = await _supabase.storage
-                    .from(STORAGE_BUCKET)
-                    .upload(filePath, file);
-
+                const { error: uploadErr } = await _supabase.storage.from(STORAGE_BUCKET).upload(filePath, file);
                 if (uploadErr) throw uploadErr;
 
-                // 2. Get Public URL
-                const { data: { publicUrl } } = _supabase.storage
-                    .from(STORAGE_BUCKET)
-                    .getPublicUrl(filePath);
+                const { data: { publicUrl } } = _supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
 
-                // 3. Update 'brands' table
-                // Including 'name' and 'slug' to avoid NOT NULL constraint violations
-                const { error: dbErr } = await _supabase
-                    .from('brands')
-                    .upsert({ 
-                        id: brandId, 
-                        name: brandName, 
-                        slug: slug,
-                        logo_url: publicUrl 
-                    }, { onConflict: 'id' });
-
+                const { error: dbErr } = await _supabase.from('brands').upsert({ id: brandId, name: brandName, slug: slug, logo_url: publicUrl }, { onConflict: 'id' });
                 if (dbErr) throw dbErr;
 
                 showToast("Logo updated successfully!", "success");
@@ -439,14 +431,36 @@
             const brandId = brandSelect.value;
 
             try {
+                // Fetch Slots
                 const { data: slots } = await _supabase
                     .from('post_slots')
-                    .select('scheduled_date')
+                    .select('id, scheduled_date')
                     .eq('brand_id', brandId)
                     .gte('scheduled_date', startStr)
                     .lte('scheduled_date', endStr);
 
-                const activeDates = new Set(slots?.map(s => s.scheduled_date) || []);
+                // Fetch Versions to determine Status for each slot (Rule 2: Fetch all relevant, filter in memory)
+                const slotIds = slots?.map(s => s.id) || [];
+                let versionsMap = {};
+                
+                if (slotIds.length > 0) {
+                    const { data: vData } = await _supabase
+                        .from('post_versions')
+                        .select('slot_id, status, version_number')
+                        .in('slot_id', slotIds);
+
+                    // Group by slot and get latest status
+                    vData?.forEach(v => {
+                        if (!versionsMap[v.slot_id] || v.version_number > versionsMap[v.slot_id].version_number) {
+                            versionsMap[v.slot_id] = v;
+                        }
+                    });
+                }
+
+                const activeDates = {}; 
+                slots?.forEach(s => {
+                    activeDates[s.scheduled_date] = versionsMap[s.id]?.status || 'pending';
+                });
                 
                 const { data: approval } = await _supabase
                     .from('weekly_approvals')
@@ -464,16 +478,22 @@
                     const currentDay = new Date(monday);
                     currentDay.setDate(monday.getDate() + i);
                     const iso = currentDay.toISOString().split('T')[0];
-                    const hasPost = activeDates.has(iso);
+                    const status = activeDates[iso];
                     const isSelected = iso === postDateInput.value;
+
+                    let statusClass = '';
+                    if (status === 'approved') statusClass = 'dot-approved';
+                    else if (status === 'pending') statusClass = 'dot-pending';
+                    else if (status === 'rejected') statusClass = 'dot-rejected';
 
                     weekDaysGrid.innerHTML += `
                         <div onclick="selectDate('${iso}')" class="flex flex-col items-center gap-2 cursor-pointer group">
                             <span class="text-[9px] font-bold ${isSelected ? 'text-emerald-600' : 'text-slate-400'} uppercase">${dayNames[i]}</span>
-                            <div class="w-8 h-8 rounded-full transition-all flex items-center justify-center text-[10px] font-bold 
-                                ${hasPost ? 'day-active shadow-md' : 'bg-slate-50 text-slate-300'} 
-                                ${isSelected ? 'ring-2 ring-emerald-500 ring-offset-2' : 'group-hover:bg-slate-100'}">
+                            <div class="w-8 h-8 rounded-full day-circle transition-all flex items-center justify-center text-[10px] font-bold 
+                                ${status ? 'day-active' : 'bg-slate-50 text-slate-300'} 
+                                ${isSelected ? 'day-selected' : 'group-hover:bg-slate-100'}">
                                 ${currentDay.getDate()}
+                                ${status ? `<div class="status-dot ${statusClass}"></div>` : ''}
                             </div>
                         </div>
                     `;
@@ -481,7 +501,6 @@
             } catch (err) { console.error(err); }
         }
 
-        // 2. Fetch Existing Post for Selected Date
         async function fetchPostForDate(iso) {
             const brandId = brandSelect.value;
             historyContainer.innerHTML = '<p class="text-[10px] text-slate-400 italic">Searching records...</p>';
@@ -551,15 +570,22 @@
                 historyContainer.innerHTML = '<p class="text-[10px] text-slate-400 italic">No history found.</p>';
                 return;
             }
-            historyContainer.innerHTML = versions.map(v => `
-                <div class="p-3 bg-white border border-slate-100 rounded-xl text-left shadow-sm">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-[9px] font-bold text-slate-400 uppercase">Version ${v.version_number}</span>
-                        <span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 uppercase">${v.status || 'draft'}</span>
+            historyContainer.innerHTML = versions.map(v => {
+                let statusBadgeColor = 'bg-slate-50 text-slate-500';
+                if (v.status === 'approved') statusBadgeColor = 'bg-emerald-50 text-emerald-600';
+                else if (v.status === 'rejected') statusBadgeColor = 'bg-rose-50 text-rose-600';
+                else if (v.status === 'pending') statusBadgeColor = 'bg-amber-50 text-amber-600';
+
+                return `
+                    <div class="p-3 bg-white border border-slate-100 rounded-xl text-left shadow-sm">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[9px] font-bold text-slate-400 uppercase">Version ${v.version_number}</span>
+                            <span class="text-[8px] font-bold px-2 py-0.5 rounded-full uppercase ${statusBadgeColor}">${v.status || 'draft'}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-600 line-clamp-2">${v.caption || 'No caption text'}</p>
                     </div>
-                    <p class="text-[10px] text-slate-600 line-clamp-2">${v.caption || 'No caption text'}</p>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         window.resetFormToNew = () => {
@@ -583,18 +609,13 @@
             updatePreview();
         };
 
-        // 3. Submit Logic
         window.submitPost = async () => {
             const btn = submitBtn;
-            const msg = msgBox;
-            
-            // 1. Validation
             const date = postDateInput.value;
             const caption = captionInput.value;
             const fileInputs = Array.from(document.querySelectorAll('.media-file-input'));
             const files = fileInputs.map(input => input.files[0]).filter(Boolean);
 
-            // Important: Check if anything is actually being uploaded or changed
             if (files.length === 0 && !caption) {
                 showToast("Please provide a caption or select a file to upload.", "error");
                 return;
@@ -604,73 +625,37 @@
             btn.innerText = "Uploading Media...";
             
             try {
-                // 1. Upload files to Storage
                 const uploadedUrls = [];
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     const fileName = `${Date.now()}_${i}.${file.name.split('.').pop()}`;
                     const filePath = `${brandSelect.value}/${fileName}`;
-                    
                     btn.innerText = `Uploading Part ${i+1}...`;
-                    
-                    const { error: uploadErr } = await _supabase.storage
-                        .from(STORAGE_BUCKET)
-                        .upload(filePath, file);
-                    
+                    const { error: uploadErr } = await _supabase.storage.from(STORAGE_BUCKET).upload(filePath, file);
                     if (uploadErr) throw uploadErr;
-                    
-                    const { data: { publicUrl } } = _supabase.storage
-                        .from(STORAGE_BUCKET)
-                        .getPublicUrl(filePath);
-                        
+                    const { data: { publicUrl } } = _supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
                     uploadedUrls.push(publicUrl);
                 }
 
                 btn.innerText = "Finalizing Records...";
-
-                // 2. Handle/Find Slot
                 let slotId = currentSlot?.id;
                 if (!slotId) {
-                    // Double check if slot exists for this date before inserting (prevent race conditions)
-                    const { data: existingSlot } = await _supabase
-                        .from('post_slots')
-                        .select('id')
-                        .eq('brand_id', brandSelect.value)
-                        .eq('scheduled_date', date)
-                        .maybeSingle();
-
-                    if (existingSlot) {
-                        slotId = existingSlot.id;
-                    } else {
-                        const { data: newSlot, error: sErr } = await _supabase
-                            .from('post_slots')
-                            .insert([{ brand_id: brandSelect.value, scheduled_date: date }])
-                            .select()
-                            .single();
+                    const { data: existingSlot } = await _supabase.from('post_slots').select('id').eq('brand_id', brandSelect.value).eq('scheduled_date', date).maybeSingle();
+                    if (existingSlot) slotId = existingSlot.id;
+                    else {
+                        const { data: newSlot, error: sErr } = await _supabase.from('post_slots').insert([{ brand_id: brandSelect.value, scheduled_date: date }]).select().single();
                         if (sErr) throw sErr;
                         slotId = newSlot.id;
                     }
                 }
 
-                // 3. Create New Version
                 const nextVerNum = (currentVersions[0]?.version_number || 0) + 1;
-                const { data: version, error: vErr } = await _supabase
-                    .from('post_versions')
-                    .insert([{ slot_id: slotId, version_number: nextVerNum, caption: caption, status: 'pending' }])
-                    .select()
-                    .single();
-                
+                const { data: version, error: vErr } = await _supabase.from('post_versions').insert([{ slot_id: slotId, version_number: nextVerNum, caption: caption, status: 'pending' }]).select().single();
                 if (vErr) throw vErr;
 
-                // 4. Media Assets
                 if (uploadedUrls.length > 0) {
-                    const assets = uploadedUrls.map((url, idx) => ({ 
-                        version_id: version.id, 
-                        file_url: url, 
-                        order_index: idx 
-                    }));
-                    const { error: assetErr } = await _supabase.from('media_assets').insert(assets);
-                    if (assetErr) throw assetErr;
+                    const assets = uploadedUrls.map((url, idx) => ({ version_id: version.id, file_url: url, order_index: idx }));
+                    await _supabase.from('media_assets').insert(assets);
                 }
 
                 showToast(`Successfully saved Version ${nextVerNum}`, "success");
@@ -685,7 +670,6 @@
             }
         };
 
-        // UI Standard helpers
         window.updateApprovalUI = (status) => {
             if (status === 'approved') {
                 weeklyStatusBadge.innerText = "Approved for Rollout";
@@ -713,9 +697,7 @@
                 fileNameSpan.innerText = input.files[0].name;
                 if (input === document.querySelector('.media-file-input')) {
                     const reader = new FileReader();
-                    reader.onload = (e) => { 
-                        previewMedia.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`; 
-                    };
+                    reader.onload = (e) => { previewMedia.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`; };
                     reader.readAsDataURL(input.files[0]);
                 }
             }
@@ -747,8 +729,6 @@
         };
 
         captionInput.oninput = updatePreview;
-        
-        // Initial load sequence
         loadBrandMetadata();
         loadWeeklyData();
     </script>
